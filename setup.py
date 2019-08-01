@@ -8,8 +8,20 @@ import aiorosapi
 setup(
     name='aiorosapi',
     version=aiorosapi.__version__,
-    packages=find_packages(),
-    long_description=open(join(dirname(__file__), 'README.md')).read(),
 
+    author="Andrey Gusev",
+    author_email="gaussgss@gmail.com",
+    url="https://github.com/gaussgss/aiorosapi",
+
+    long_description=open(join(dirname(__file__), 'README.md')).read(),
+    long_description_content_type="text/markdown",
+
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
+
+    packages=find_packages(exclude=["tests"]),
     test_suite='tests'
 )
