@@ -1,7 +1,11 @@
 
 *.egg-info/
+build/
+dist/
+
 .idea/
 venv/
+
 
 *.py[co]
 *.tmp
