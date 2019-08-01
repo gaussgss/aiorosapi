@@ -1,0 +1,9 @@
+
+*.egg-info/
+.idea/
+venv/
+
+*.py[co]
+*.tmp
+*~
+~*
