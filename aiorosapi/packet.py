@@ -93,13 +93,11 @@ class RosApiWordParser(object):
         self._tmp_counter = count
 
     def _sm_feed_length_more(self, c):
-        if not self._tmp_counter:
-            self._switch_state(self._sm_init_word, self._tmp_value)
-            return
-
         self._tmp_value = ((self._tmp_value << 8) | c)
         self._tmp_counter -= 1
 
+        if not self._tmp_counter:
+            self._switch_state(self._sm_init_word, self._tmp_value)
 
     def _sm_init_word(self, wordlen):
         self._state_fun = self._sm_feed_word
