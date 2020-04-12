@@ -45,10 +45,15 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
     def eof_received(self):
         return False
 
+    def is_connected(self):
+        return self._transport is not None
+
     async def _receive_sentence(self):
         answer = []
         while True:
+            if not self.is_connected(): raise RosApiConnectionLostException()
             r = await self._received_frames.get()
+            if r is RosApiConnectionLostException: raise RosApiConnectionLostException()
             if r is b'': break
             answer.append(r)
 
@@ -87,6 +92,7 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
     async def _talk(self, sentence):
         self.logging.debug('API REQUEST {}'.format(sentence))
 
+        if self._transport is None: raise RosApiConnectionLostException()
         self._transport.write(sentence)
 
         exception = None
