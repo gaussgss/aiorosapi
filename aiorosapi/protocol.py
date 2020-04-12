@@ -201,7 +201,7 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
         :param attrs: dict of attributes to match
         :return: list of matched records
         """
-        return self.find(
+        return await self.find(
             cmd,
             lambda m: any(
                 m.get(k) == v for k, v in attrs.items()
