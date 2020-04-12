@@ -179,7 +179,13 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
         if len(out) != 1: raise RosApiTooManyResultsException()
         return out[0]
 
-    async def find(self, cmd, match=lambda a: False):
+    async def find(self, cmd, match=lambda a: True):
+        """
+        Iterate over all values returned by cmd/print and return sentences that matched by 'match' function
+        :param cmd: api command to search, /print will be appended automatically
+        :param match: filter function returns True if record is matched
+        :return: list of matched records
+        """
         out = []
         if not cmd.endswith('/print'): cmd += '/print'
         rsp = await self.talk_all(cmd)
@@ -188,7 +194,13 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
 
         return out
 
-    async def find_id(self, cmd, attrs):
+    async def find_attrs(self, cmd, attrs):
+        """
+        Search list and return records that matches all of attrs
+        :param cmd: api command to search, /print will be appended automatically
+        :param attrs: dict of attributes to match
+        :return: list of matched records
+        """
         return self.find(
             cmd,
             lambda m: any(
@@ -197,6 +209,13 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
         )
 
     async def set_values(self, cmd, search, values_to_set):
+        """
+        Set values to records matched by search
+        :param cmd: command to work with
+        :param search: dict with search request
+        :param values_to_set: values to set into matched records
+        :return: list of changed record id's
+        """
         changed = []
 
         rsp_find = await self.talk_all(cmd + '/print')
