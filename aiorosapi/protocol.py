@@ -94,11 +94,29 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
         return parsed, skipped
 
     def _parse_obj(self, obj_str):
-        # TODO: better parsing
         parsed = {}
-        for item in obj_str.split(';'):
-            k, v = item.split('=', 1)
-            parsed[k] = v
+
+        buf = ''
+        cur_name = None
+        cur_value = None
+        for ch in obj_str:
+            if ch == '=':
+                if cur_name is not None: parsed[cur_name] = cur_value
+
+                cur_name = buf
+                cur_value = []
+                buf = ''
+
+            elif ch == ';':
+                cur_value.append(buf)
+                buf = ''
+
+            else:
+                buf += ch
+
+        if cur_name is not None:
+            cur_value.append(buf)
+            parsed[cur_name] = cur_value
 
         return parsed
 
