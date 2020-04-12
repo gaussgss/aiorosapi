@@ -3,12 +3,15 @@
 
 import asyncio
 from asyncio import QueueEmpty
-
+from collections import namedtuple
 
 from .packet import RosApiSentenceEncoder, RosApiWordParser
 from .exceptions import RosApiConnectionLostException, RosApiCommunicationException, RosApiNoResultsException, \
     RosApiTooManyResultsException, RosApiTrapException, RosApiFatalException, RosApiLoginFailureException
 from .utils import LoggingMixin
+
+
+RosApiAnswer = namedtuple('RosApiAnswer', 'ret items')
 
 
 class RosApiProtocol(asyncio.Protocol, LoggingMixin):
@@ -72,6 +75,15 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
 
         return parsed, skipped
 
+    def _parse_obj(self, obj_str):
+        # TODO: better parsing
+        parsed = {}
+        for item in obj_str.split(';'):
+            k, v = item.split('=', 1)
+            parsed[k] = v
+
+        return parsed
+
     async def _talk(self, sentence):
         self.logging.debug('API REQUEST {}'.format(sentence))
 
@@ -90,27 +102,29 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
 
             ans = answer[0]
             if ans == self.DONE_REPLY:
+                ret, skip = self._parse_kv(answer[1:])
+                if len(skip): self.logging.debug('skipped words in !done answer: {}'.format(skip))
                 break
 
             elif ans == self.DATA_REPLY:
                 result, skip = self._parse_kv(answer[1:])
                 results.append(result)
-                if len(skip): self.logging.debug("skipped words in answer: {}".format(skip))
+                if len(skip): self.logging.debug("skipped words in !data answer: {}".format(skip))
 
             elif ans == self.TRAP_REPLY:
                 exception = RosApiTrapException
                 exception_info, skip = self._parse_kv(answer[1:])
-                if len(skip): self.logging.debug("skipped words in answer: {}".format(skip))
+                if len(skip): self.logging.debug("skipped words in !trap answer: {}".format(skip))
 
             elif ans == self.FATAL_REPLY:
                 exception = RosApiFatalException
                 exception_info, skip = self._parse_kv(answer[1:])
-                if len(skip): self.logging.debug("skipped words in answer: {}".format(skip))
+                if len(skip): self.logging.debug("skipped words in !fatal answer: {}".format(skip))
 
         if exception is not None:
             raise exception(exception_info)
 
-        return results
+        return RosApiAnswer(ret, results)
 
     # developer-side api
 
@@ -137,6 +151,32 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
             try: self._received_frames.get_nowait()
             except QueueEmpty: break
 
+    async def execute(self, cmd, attrs=None, query=None):
+        """
+        Execute command and return tuple of (ret, items)
+        :param cmd: command to execute
+        :param attrs: attributes
+        :param query: query
+        :return: RosApiAnswer tuple
+        """
+        sentence = RosApiSentenceEncoder(cmd, attrs, query).get_buffer()
+        return await self._talk(sentence)
+
+    async def execute_ret_obj(self, cmd, attrs=None, query=None):
+        """
+        Execute command and return tuple of (ret_kv, items)
+        :param cmd: command to execute
+        :param attrs: attributes
+        :param query: query
+        :return: RosApiAnswer tuple
+        """
+        sentence = RosApiSentenceEncoder(cmd, attrs, query).get_buffer()
+        ret, items = await self._talk(sentence)
+        ret = ret.get('ret', '')
+        ret = self._parse_obj(ret)
+        return ret, items
+
+
     async def talk_all(self, cmd, attrs=None, query=None):
         """
         Perform API request and return all sentences as list of dicts
@@ -146,7 +186,7 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
         :return: all received sentences as a list of dicts
         """
         sentence = RosApiSentenceEncoder(cmd, attrs, query).get_buffer()
-        return await self._talk(sentence)
+        return (await self._talk(sentence)).items
 
     async def talk_first(self, cmd, attrs=None, query=None):
         """
@@ -158,7 +198,7 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
         :exception RosApiNoResultsException if empty result set is received
         """
         sentence = RosApiSentenceEncoder(cmd, attrs, query).get_buffer()
-        out = await self._talk(sentence)
+        ret, out = await self._talk(sentence)
         if not len(out): raise RosApiNoResultsException()
         return out[0]
 
@@ -174,7 +214,7 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
         :exception RosApiTooManyResultsException if received more than one result sentence
         """
         sentence = RosApiSentenceEncoder(cmd, attrs, query).get_buffer()
-        out = await self._talk(sentence)
+        ret, out = await self._talk(sentence)
         if not len(out): raise RosApiNoResultsException()
         if len(out) != 1: raise RosApiTooManyResultsException()
         return out[0]
