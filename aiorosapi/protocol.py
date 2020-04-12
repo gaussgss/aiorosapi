@@ -179,6 +179,42 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
         if len(out) != 1: raise RosApiTooManyResultsException()
         return out[0]
 
+    async def find(self, cmd, match=lambda a: False):
+        out = []
+        if not cmd.endswith('/print'): cmd += '/print'
+        rsp = await self.talk_all(cmd)
+        for l in rsp:
+            if match(l): out.append(l)
+
+        return out
+
+    async def find_id(self, cmd, attrs):
+        return self.find(
+            cmd,
+            lambda m: any(
+                m.get(k) == v for k, v in attrs.items()
+            )
+        )
+
+    async def set_values(self, cmd, search, values_to_set):
+        changed = []
+
+        rsp_find = await self.talk_all(cmd + '/print')
+        for line in rsp_find:
+            for k, v in search.items():
+                if line.get(k) != v: continue
+
+                lid = line.get('.id')
+
+                vts = {'.id': lid}
+                vts.update(values_to_set)
+
+                await self.talk_all(cmd + '/set', vts)
+                changed.append(lid)
+
+        return changed
+
+
     def _make_login_sentence(self, username, password):
         """
         Generate login sentence for currently set credentials
