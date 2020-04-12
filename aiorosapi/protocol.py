@@ -7,7 +7,8 @@ from collections import namedtuple
 
 from .packet import RosApiSentenceEncoder, RosApiWordParser
 from .exceptions import RosApiConnectionLostException, RosApiCommunicationException, RosApiNoResultsException, \
-    RosApiTooManyResultsException, RosApiTrapException, RosApiFatalException, RosApiLoginFailureException
+    RosApiTooManyResultsException, RosApiTrapException, RosApiFatalException, RosApiLoginFailureException, \
+    RosApiCommunicationTimeoutException
 from .utils import LoggingMixin
 
 
@@ -20,7 +21,6 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
     TRAP_REPLY = b'!trap'
     FATAL_REPLY = b'!fatal'
 
-    def __init__(self, talk_encoding='utf-8', loop=None):
     @property
     def logging_raw(self):
         return self.logging.getChild('raw')
@@ -29,12 +29,15 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
     def logging_proto(self):
         return self.logging.getChild('protocol')
 
+    def __init__(self, talk_encoding='utf-8', answer_timeout=30, loop=None):
         self._talk_encoding = talk_encoding
         self._loop = loop or asyncio.get_event_loop()
 
         self._parser = RosApiWordParser()
         self._disconnected = self._loop.create_future()
         self._received_frames = asyncio.Queue()
+
+        self._answer_timeout = answer_timeout
 
     def connection_made(self, t):
         self.logging_raw.debug("Connected to API {}".format(t))
@@ -110,7 +113,9 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
         results = []
 
         while True:
-            answer = await self._receive_sentence()
+            try: answer = await asyncio.wait_for(self._receive_sentence(), self._answer_timeout)
+            except asyncio.TimeoutError: raise RosApiCommunicationTimeoutException("No answer from device")
+
             if len(answer) == 0: raise RosApiCommunicationException("Zero length answer")
 
             self.logging_proto.debug("API ANSWER {}".format(answer))

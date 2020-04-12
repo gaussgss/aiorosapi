@@ -12,7 +12,7 @@ class RosApiSentenceOrderException(RosApiDataException): pass
 class RosApiProtocolException(RosApiException): pass
 class RosApiConnectionLostException(RosApiProtocolException): pass
 class RosApiCommunicationException(RosApiProtocolException): pass
-
+class RosApiCommunicationTimeoutException(RosApiCommunicationException): pass
 
 class RosApiCommandException(RosApiException): pass
 class RosApiTrapException(RosApiCommandException): pass
