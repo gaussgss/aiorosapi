@@ -21,6 +21,14 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
     FATAL_REPLY = b'!fatal'
 
     def __init__(self, talk_encoding='utf-8', loop=None):
+    @property
+    def logging_raw(self):
+        return self.logging.getChild('raw')
+
+    @property
+    def logging_proto(self):
+        return self.logging.getChild('protocol')
+
         self._talk_encoding = talk_encoding
         self._loop = loop or asyncio.get_event_loop()
 
@@ -29,16 +37,17 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
         self._received_frames = asyncio.Queue()
 
     def connection_made(self, t):
-        self.logging.debug("Connected to API {}".format(t))
+        self.logging_raw.debug("Connected to API {}".format(t))
         self._transport = t
 
     def connection_lost(self, e):
-        self.logging.debug("Connection lost: {}".format(e))
+        self.logging_raw.debug("Connection lost: {}".format(e))
         self._transport = None
         self._disconnected.set_result(True)
         self._loop.create_task(self._received_frames.put(RosApiConnectionLostException))
 
     def data_received(self, data):
+        self.logging_raw.debug('Received data: {}'.format(data))
         for out in self._parser.feed(data):
             self._loop.create_task(self._received_frames.put(out))
 
@@ -90,7 +99,7 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
         return parsed
 
     async def _talk(self, sentence):
-        self.logging.debug('API REQUEST {}'.format(sentence))
+        self.logging_proto.debug('API REQUEST {}'.format(sentence))
 
         if self._transport is None: raise RosApiConnectionLostException()
         self._transport.write(sentence)
@@ -104,28 +113,28 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
             answer = await self._receive_sentence()
             if len(answer) == 0: raise RosApiCommunicationException("Zero length answer")
 
-            self.logging.debug("API ANSWER {}".format(answer))
+            self.logging_proto.debug("API ANSWER {}".format(answer))
 
             ans = answer[0]
             if ans == self.DONE_REPLY:
                 ret, skip = self._parse_kv(answer[1:])
-                if len(skip): self.logging.debug('skipped words in !done answer: {}'.format(skip))
+                if len(skip): self.logging_proto.debug('skipped words in !done answer: {}'.format(skip))
                 break
 
             elif ans == self.DATA_REPLY:
                 result, skip = self._parse_kv(answer[1:])
                 results.append(result)
-                if len(skip): self.logging.debug("skipped words in !data answer: {}".format(skip))
+                if len(skip): self.logging_proto.debug("skipped words in !data answer: {}".format(skip))
 
             elif ans == self.TRAP_REPLY:
                 exception = RosApiTrapException
                 exception_info, skip = self._parse_kv(answer[1:])
-                if len(skip): self.logging.debug("skipped words in !trap answer: {}".format(skip))
+                if len(skip): self.logging_proto.debug("skipped words in !trap answer: {}".format(skip))
 
             elif ans == self.FATAL_REPLY:
                 exception = RosApiFatalException
                 exception_info, skip = self._parse_kv(answer[1:])
-                if len(skip): self.logging.debug("skipped words in !fatal answer: {}".format(skip))
+                if len(skip): self.logging_proto.debug("skipped words in !fatal answer: {}".format(skip))
 
         if exception is not None:
             raise exception(exception_info)
