@@ -47,12 +47,13 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
         self.logging_raw.debug("Connection lost: {}".format(e))
         self._transport = None
         self._disconnected.set_result(True)
-        self._loop.create_task(self._received_frames.put(RosApiConnectionLostException))
+        self._received_frames.put_nowait(RosApiConnectionLostException)
 
     def data_received(self, data):
         self.logging_raw.debug('Received data: {}'.format(data))
         for out in self._parser.feed(data):
-            self._loop.create_task(self._received_frames.put(out))
+            self.logging_raw.debug('Received frame: {}'.format(out))
+            self._received_frames.put_nowait(out)
 
     def eof_received(self):
         return False
