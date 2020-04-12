@@ -33,7 +33,7 @@ class RosApiProtocol(asyncio.Protocol, LoggingMixin):
         self.logging.debug("Connection lost: {}".format(e))
         self._transport = None
         self._disconnected.set_result(True)
-        self._received_frames.put(RosApiConnectionLostException)
+        self._loop.create_task(self._received_frames.put(RosApiConnectionLostException))
 
     def data_received(self, data):
         for out in self._parser.feed(data):
